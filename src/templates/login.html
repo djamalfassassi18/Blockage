@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Connexion - Anti-Brute Force{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white text-center">
+            <h4><i class="fas fa-shield-alt"></i> Connexion Sécurisée</h4>
+        </div>
+        <div class="card-body p-4">
+            <div id="securityStatus" class="alert alert-info d-none">
+                <i class="fas fa-info-circle"></i> <span id="statusText"></span>
+            </div>
+
+            <form id="loginForm">
+                <div class="mb-3">
+                    <label for="username" class="form-label">Nom d'utilisateur</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="password" class="form-label">Mot de passe</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary" id="loginBtn">
+                        <i class="fas fa-sign-in-alt"></i> Se connecter
+                    </button>
+                </div>
+            </form>
+
+            <div class="mt-3 text-center">
+                <small class="text-muted">
+                    <i class="fas fa-lock"></i> Système protégé contre les attaques brute force
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informations de test -->
+    <div class="mt-4">
+        <div class="alert alert-warning">
+            <h6><i class="fas fa-vial"></i> Comptes de test:</h6>
+            <ul class="mb-0">
+                <li><strong>admin / admin123</strong></li>
+                <li><strong>user / user123</strong></li>
+                <li><strong>test / test123</strong></li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const loginBtn = document.getElementById('loginBtn');
+    const originalText = loginBtn.innerHTML;
+    
+    // Désactiver le bouton
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connexion...';
+    
+    const formData = {
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value
+    };
+    
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => {
+                window.location.href = data.redirect || '/dashboard';
+            }, 1000);
+        } else {
+            if (data.blocked) {
+                showAlert('danger', data.message);
+            } else {
+                showAlert('warning', data.message);
+                if (data.attempts_remaining !== undefined) {
+                    updateSecurityStatus(data.attempts_remaining);
+                }
+            }
+        }
+    } catch (error) {
+        showAlert('danger', 'Erreur de connexion au serveur');
+    } finally {
+        loginBtn.disabled = false;
+        loginBtn.innerHTML = originalText;
+    }
+});
+
+function showAlert(type, message) {
+    const statusDiv = document.getElementById('securityStatus');
+    const statusText = document.getElementById('statusText');
+    
+    statusDiv.className = `alert alert-${type}`;
+    statusText.textContent = message;
+    statusDiv.classList.remove('d-none');
+}
+
+function updateSecurityStatus(attemptsRemaining) {
+    const statusDiv = document.getElementById('securityStatus');
+    const statusText = document.getElementById('statusText');
+    
+    if (attemptsRemaining <= 2) {
+        statusDiv.className = 'alert alert-warning';
+        statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Attention: ${attemptsRemaining} tentative(s) restante(s)`;
+    } else {
+        statusDiv.className = 'alert alert-info';
+        statusText.innerHTML = `<i class="fas fa-info-circle"></i> ${attemptsRemaining} tentatives restantes`;
+    }
+    statusDiv.classList.remove('d-none');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Tableau de Bord - Anti-Brute Force{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-tachometer-alt"></i> Tableau de Bord Sécurité</h1>
+        <p class="text-muted">Surveillance en temps réel des tentatives de connexion</p>
+    </div>
+</div>
+
+<div class="row mt-4" id="statsCards">
+    <div class="col-md-3 mb-4">
+        <div class="card stat-card border-danger">
+            <div class="card-body text-center">
+                <h3><i class="fas fa-ban text-danger"></i> <span id="blockedCount">0</span></h3>
+                <p class="card-text">IPs Bloquées</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-4">
+        <div class="card stat-card border-warning">
+            <div class="card-body text-center">
+                <h3><i class="fas fa-times-circle text-warning"></i> <span id="failedAttempts">0</span></h3>
+                <p class="card-text">Échecs (24h)</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-4">
+        <div class="card stat-card border-info">
+            <div class="card-body text-center">
+                <h3><i class="fas fa-sign-in-alt text-info"></i> <span id="totalAttempts">0</span></h3>
+                <p class="card-text">Total Tentatives</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-4">
+        <div class="card stat-card border-success">
+            <div class="card-body text-center">
+                <h3><i class="fas fa-shield-alt text-success"></i> Actif</h3>
+                <p class="card-text">Statut Système</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-list"></i> IPs Actuellement Bloquées</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadBlockedIPs()">
+                    <i class="fas fa-sync-alt"></i> Actualiser
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="blockedIPsList">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Chargement...</span>
+                        </div>
+                        <p class="mt-2">Chargement des IPs bloquées...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Top des IPs Suspectes</h5>
+            </div>
+            <div class="card-body">
+                <div id="suspiciousIPs">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-warning" role="status">
+                            <span class="visually-hidden">Chargement...</span>
+                        </div>
+                        <p class="mt-2">Chargement des IPs suspectes...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadStats();
+    loadBlockedIPs();
+    setInterval(loadStats, 30000);
+    setInterval(loadBlockedIPs, 30000);
+});
+
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats');
+        const data = await response.json();
+        
+        document.getElementById('blockedCount').textContent = data.blocked_ips || 0;
+        document.getElementById('failedAttempts').textContent = data.failed_attempts_24h || 0;
+        document.getElementById('totalAttempts').textContent = data.total_attempts || 0;
+        updateSuspiciousIPs(data.top_suspicious || []);
+        
+    } catch (error) {
+        console.error('Erreur chargement stats:', error);
+    }
+}
+
+async function loadBlockedIPs() {
+    try {
+        const response = await fetch('/api/blocked-ips');
+        const blockedIPs = await response.json();
+        
+        const container = document.getElementById('blockedIPsList');
+        
+        if (blockedIPs.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-check-circle fa-2x mb-3"></i>
+                    <p>Aucune IP bloquée actuellement</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Adresse IP</th>
+                            <th>Raison</th>
+                            <th>Heure de blocage</th>
+                            <th>Déblocage dans</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${blockedIPs.map(ip => `
+                            <tr>
+                                <td><code>${ip.ip_address}</code></td>
+                                <td>${ip.reason}</td>
+                                <td>${new Date(ip.block_time).toLocaleString()}</td>
+                                <td><span class="badge bg-warning">${ip.time_remaining}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-success" onclick="unblockIP('${ip.ip_address}')">
+                                        <i class="fas fa-unlock"></i> Débloquer
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Erreur chargement IPs bloquées:', error);
+    }
+}
+
+function updateSuspiciousIPs(suspiciousIPs) {
+    const container = document.getElementById('suspiciousIPs');
+    
+    if (suspiciousIPs.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-2 text-muted">
+                <i class="fas fa-check-circle"></i> Aucune IP suspecte
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="list-group">
+            ${suspiciousIPs.map(ip => `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <code>${ip.ip}</code>
+                        <small class="text-muted ms-2">${ip.attempts} tentative(s) échouée(s)</small>
+                    </div>
+                    <span class="badge bg-warning rounded-pill">${ip.attempts}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+async function unblockIP(ipAddress) {
+    if (!confirm(`Voulez-vous vraiment débloquer l'IP ${ipAddress} ?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/unblock-ip/${encodeURIComponent(ipAddress)}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ ' + data.message);
+            loadBlockedIPs();
+            loadStats();
+        } else {
+            alert('❌ ' + data.message);
+        }
+        
+    } catch (error) {
+        console.error('Erreur déblocage IP:', error);
+        alert('❌ Erreur lors du déblocage');
+    }
+}
+</script>
+{% endblock %}

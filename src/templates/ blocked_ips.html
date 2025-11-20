@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}IPs Bloquées - Anti-Brute Force{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-ban"></i> Gestion des IPs Bloquées</h1>
+    <div>
+        <button class="btn btn-outline-primary" onclick="loadBlockedIPs()">
+            <i class="fas fa-sync-alt"></i> Actualiser
+        </button>
+        <a href="/dashboard" class="btn btn-primary">
+            <i class="fas fa-tachometer-alt"></i> Tableau de Bord
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list"></i> Liste des IPs Bloquées</h5>
+    </div>
+    <div class="card-body">
+        <div id="blockedIPsContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Chargement...</span>
+                </div>
+                <p class="mt-2">Chargement des IPs bloquées...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadBlockedIPs);
+
+async function loadBlockedIPs() {
+    try {
+        const response = await fetch('/api/blocked-ips');
+        const blockedIPs = await response.json();
+        
+        const container = document.getElementById('blockedIPsContainer');
+        
+        if (blockedIPs.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-check-circle fa-3x mb-3"></i>
+                    <h4>Aucune IP bloquée actuellement</h4>
+                    <p>Le système fonctionne normalement, aucune activité suspecte détectée.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Adresse IP</th>
+                            <th>Raison du Blocage</th>
+                            <th>Date/Heure</th>
+                            <th>Temps Restant</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${blockedIPs.map(ip => `
+                            <tr>
+                                <td>
+                                    <code class="fs-6">${ip.ip_address}</code>
+                                </td>
+                                <td>${ip.reason}</td>
+                                <td>${new Date(ip.block_time).toLocaleString('fr-FR')}</td>
+                                <td>
+                                    <span class="badge bg-danger fs-6">${ip.time_remaining}</span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-success" onclick="unblockIP('${ip.ip_address}')" title="Débloquer cette IP">
+                                        <i class="fas fa-unlock"></i> Débloquer
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3 text-muted">
+                <small><i class="fas fa-info-circle"></i> ${blockedIPs.length} IP(s) bloquée(s)</small>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Erreur:', error);
+        document.getElementById('blockedIPsContainer').innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-exclamation-triangle"></i> Erreur</h5>
+                <p>Impossible de charger la liste des IPs bloquées.</p>
+                <button class="btn btn-sm btn-outline-danger" onclick="loadBlockedIPs()">
+                    <i class="fas fa-redo"></i> Réessayer
+                </button>
+            </div>
+        `;
+    }
+}
+
+async function unblockIP(ipAddress) {
+    if (!confirm(`Êtes-vous sûr de vouloir débloquer l'IP ${ipAddress} ?\n\nCette action permettra à cette IP de tenter de nouveau de se connecter.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/unblock-ip/${encodeURIComponent(ipAddress)}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showAlert('success', `<strong>${ipAddress}</strong> a été débloquée avec succès.`);
+            loadBlockedIPs();
+        } else {
+            showAlert('danger', data.message || 'Erreur lors du déblocage.');
+        }
+        
+    } catch (error) {
+        console.error('Erreur:', error);
+        showAlert('danger', 'Erreur de communication avec le serveur.');
+    }
+}
+
+function showAlert(type, message) {
+    // Créer une alerte Bootstrap
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Insérer au début du conteneur
+    const container = document.querySelector('.container');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Supprimer après 5 secondes
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

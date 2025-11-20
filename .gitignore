@@ -1,0 +1,35 @@
+# Environnement virtuel Python
+venv/
+env/
+.venv/
+
+# Fichiers de base de données
+*.db
+*.sqlite3
+security.db
+
+# Fichiers de log
+*.log
+logs/
+
+# Fichiers de cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environnements virtuels
+.vscode/
+.idea/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Fichiers sensibles
+config.py
+.env
+.secrets
+
+# Backup files
+*.bak
+*.backup
